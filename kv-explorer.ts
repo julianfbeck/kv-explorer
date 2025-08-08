@@ -2,42 +2,88 @@ import { createCliRenderer, BoxRenderable, TextRenderable, ContainerElement, Sel
 import { BufferedElement } from "@/opentui"
 import { getKeyHandler } from "@/opentui/ui/lib/KeyHandler"
 import type { ParsedKey } from "@/opentui"
+import { renderFontToFrameBuffer, measureText } from "@/opentui/ui/ascii.font"
+import { RGBA } from "@/opentui"
 import { AzureCliCredential } from "@azure/identity"
 import { SecretClient, type SecretProperties } from "@azure/keyvault-secrets"
 import { $ } from "bun"
 
-// Simple multi-line text element with wrapping
+// Enhanced multi-line text element with font support and better formatting
 class TextBlockElement extends BufferedElement {
   private text: string = ""
+  private useStyledHeader: boolean = false
 
   constructor(id: string, opts: ConstructorParameters<typeof BufferedElement>[1]) {
     super(id, opts)
   }
 
-  public setText(text: string) {
+  public setText(text: string, styled: boolean = false) {
     this.text = text
+    this.useStyledHeader = styled
     // Mark for full refresh so new text renders without requiring a terminal resize
     this.needsRefresh = true
   }
 
   protected refreshContent(contentX: number, contentY: number, contentWidth: number, contentHeight: number): void {
     if (!this.frameBuffer || !this.text) return
-    const words = this.text.split(/\s+/)
-    const lines: string[] = []
-    let current = ""
-    for (const w of words) {
-      if ((current + (current ? " " : "") + w).length > contentWidth) {
-        lines.push(current)
-        current = w
+    
+    let currentY = contentY
+    const lines = this.text.split('\n')
+    
+    for (let lineIdx = 0; lineIdx < lines.length && currentY < contentY + contentHeight; lineIdx++) {
+      const line = lines[lineIdx]
+      
+      // Check if this is a header line (starts with "Name:" or ends with ":")
+      const isHeader = line.match(/^[A-Z][a-zA-Z\s]*:/) || line === "Value:"
+      
+      if (isHeader && this.useStyledHeader && currentY + 2 < contentY + contentHeight) {
+        // Render header with tiny font in a nice color
+        const headerText = line.replace(':', '').trim().toUpperCase()
+        try {
+          renderFontToFrameBuffer(this.frameBuffer, {
+            text: headerText,
+            x: contentX,
+            y: currentY,
+            fg: RGBA.fromInts(100, 200, 255, 255), // Light blue
+            bg: RGBA.fromInts(20, 30, 40, 255),
+            font: "tiny"
+          })
+          currentY += 2 // Skip 2 lines for tiny font
+        } catch {
+          // Fallback to regular text if font rendering fails
+          this.frameBuffer.drawText(line, contentX, currentY, RGBA.fromInts(100, 200, 255, 255))
+          currentY += 1
+        }
+      } else if (line.trim() === "" || line === "Value:") {
+        // Empty line or value separator
+        currentY += 1
       } else {
-        current = current ? current + " " + w : w
+        // Regular content - wrap long lines
+        const words = line.split(/\s+/)
+        let current = ""
+        
+        for (const word of words) {
+          const testLine = current + (current ? " " : "") + word
+          if (testLine.length > contentWidth && current) {
+            // Draw current line and start new one
+            const color = line.includes("(no value") || line.includes("(empty)") || line.includes("(disabled)") ? 
+              RGBA.fromInts(150, 150, 150, 255) : this.getTextColor()
+            this.frameBuffer.drawText(current, contentX, currentY, color)
+            currentY += 1
+            current = word
+            if (currentY >= contentY + contentHeight) break
+          } else {
+            current = testLine
+          }
+        }
+        
+        if (current && currentY < contentY + contentHeight) {
+          const color = line.includes("(no value") || line.includes("(empty)") || line.includes("(disabled)") ? 
+            RGBA.fromInts(150, 150, 150, 255) : this.getTextColor()
+          this.frameBuffer.drawText(current, contentX, currentY, color)
+          currentY += 1
+        }
       }
-    }
-    if (current) lines.push(current)
-
-    const maxLines = Math.min(lines.length, contentHeight)
-    for (let i = 0; i < maxLines; i++) {
-      this.frameBuffer.drawText(lines[i], contentX, contentY + i, this.getTextColor())
     }
   }
 }
@@ -384,7 +430,7 @@ async function main() {
   async function loadAndShowSecret(sp: SecretProperties) {
     if (!secretClient) return
     if (!secretCache.has(sp.name)) {
-      details.setText("Fetching secret value...")
+      details.setText("Fetching secret value...", false)
       forceRender()
       try {
         const res = await secretClient.getSecret(sp.name)
@@ -394,16 +440,58 @@ async function main() {
       }
     }
     const value = secretCache.get(sp.name)
-    const metaLines = [
-      `Name: ${sp.name}`,
-      sp.contentType ? `Content-Type: ${sp.contentType}` : "",
-      sp.enabled !== undefined ? `Enabled: ${sp.enabled}` : "",
-      sp.updatedOn ? `Updated: ${formatDate(sp.updatedOn)}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n")
-    const valText = value === null ? "(no value or access denied)" : value || "(empty)"
-    details.setText(`${metaLines}\n\nValue:\n${valText}`)
+    
+    // Format with styled headers and better layout
+    const secretDetails = []
+    
+    // Basic metadata
+    secretDetails.push(`Name: ${sp.name}`)
+    
+    if (sp.contentType) {
+      secretDetails.push(`Content Type: ${sp.contentType}`)
+    }
+    
+    if (sp.enabled !== undefined) {
+      secretDetails.push(`Enabled: ${sp.enabled ? 'Yes' : 'No'}`)
+    }
+    
+    if (sp.updatedOn) {
+      secretDetails.push(`Updated: ${formatDate(sp.updatedOn)}`)
+    }
+    
+    if (sp.createdOn) {
+      secretDetails.push(`Created: ${formatDate(sp.createdOn)}`)
+    }
+    
+    if (sp.expiresOn) {
+      secretDetails.push(`Expires: ${formatDate(sp.expiresOn)}`)
+    }
+    
+    if (sp.tags && Object.keys(sp.tags).length > 0) {
+      const tagStr = Object.entries(sp.tags).map(([k, v]) => `${k}=${v}`).join(", ")
+      secretDetails.push(`Tags: ${tagStr}`)
+    }
+    
+    // Add separator and value
+    secretDetails.push("")
+    secretDetails.push("Value:")
+    
+    const valText = value === null ? "(no value or access denied)" : 
+                   value === "" ? "(empty)" : (value || "(empty)")
+    
+    // Format value with proper line breaks if it's JSON or long text
+    if (valText.startsWith('{') || valText.startsWith('[')) {
+      try {
+        const formatted = JSON.stringify(JSON.parse(valText), null, 2)
+        secretDetails.push(formatted)
+      } catch {
+        secretDetails.push(valText)
+      }
+    } else {
+      secretDetails.push(valText)
+    }
+    
+    details.setText(secretDetails.join('\n'), true)
     rightBox.title = `Details • ${sp.name}`
     atSecretDetail = true
     forceRender()
@@ -612,14 +700,14 @@ async function main() {
       const sp: SecretProperties = selected.value
       const meta = [
         `Name: ${sp.name}`,
-        sp.contentType ? `Content-Type: ${sp.contentType}` : "",
-        sp.enabled !== undefined ? `Enabled: ${sp.enabled}` : "",
+        sp.contentType ? `Content Type: ${sp.contentType}` : "",
+        sp.enabled !== undefined ? `Enabled: ${sp.enabled ? 'Yes' : 'No'}` : "",
         sp.updatedOn ? `Updated: ${formatDate(sp.updatedOn)}` : "",
         sp.tags ? `Tags: ${Object.entries(sp.tags).map(([k, v]) => `${k}=${v}`).join(", ")}` : "",
       ]
         .filter(Boolean)
         .join("\n")
-      details.setText(meta + "\n\nValue: (press Enter to load)")
+      details.setText(meta + "\n\nValue: (press Enter to load)", true)
     }
   })
 
