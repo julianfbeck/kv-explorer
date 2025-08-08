@@ -130,7 +130,7 @@ async function main() {
   })
 
   const hints = new TextRenderable("hints", {
-    content: "Tab: focus | /: search | Enter: select/open | e: edit | c: copy | r: rename | m: move | Esc: back | :q: quit",
+    content: "Tab: focus | /: search | Enter: select/open | n: new | e: edit | c: copy | r: rename | m: move | Esc: back | :q: quit",
     x: 2,
     y: 2,
     zIndex: 1,
@@ -199,6 +199,16 @@ async function main() {
     wrapSelection: true,
     fastScrollStep: 5,
   })
+
+  // Override list's handleKeyPress to prevent Enter when command bar is active
+  const originalListHandleKeyPress = list.handleKeyPress.bind(list)
+  list.handleKeyPress = function(key) {
+    const keyName = typeof key === "string" ? key : key.name
+    if ((keyName === "return" || keyName === "enter") && commandBar.visible) {
+      return false
+    }
+    return originalListHandleKeyPress(key)
+  }
 
   const details = new TextBlockElement("details", {
     x: rightBox.x + 1,
@@ -314,11 +324,12 @@ async function main() {
   let filteredSecrets: SecretProperties[] = []
   let atSecretDetail: boolean = false
 
-  type ActionMode = "none" | "editValue" | "rename" | "moveTarget" | "moveNewName"
+  type ActionMode = "none" | "editValue" | "rename" | "moveTarget" | "moveNewName" | "createName" | "createValue"
   let actionMode: ActionMode = "none"
   let actionSecret: SecretProperties | null = null
   let moveTargetVault: { name: string; vaultUri: string } | null = null
   let moveSourceSecret: SecretProperties | null = null
+  let createNewSecretName: string | null = null
 
   // Helpers
   function setLeftTitle(title: string) {
@@ -540,6 +551,35 @@ async function main() {
         details.setText(`Copied to vault ${moveTargetVault.name} as ${newName || actionSecret.name}.`)
         // Do not delete from source
         await selectVaultAndLoadSecrets(currentVault!)
+      } else if (actionMode === "createName") {
+        const name = cmd.trim()
+        if (!name) {
+          details.setText("Name cannot be empty.")
+        } else {
+          createNewSecretName = name
+          actionMode = "createValue"
+          commandBar.setTitle(`Create • value for ${name}`)
+          commandBar.setValue("")
+          commandBar.visible = true
+          commandBar.focus()
+          applyLayout(renderer.terminalWidth, renderer.terminalHeight)
+          forceRender()
+          return
+        }
+      } else if (actionMode === "createValue" && createNewSecretName) {
+        const value = cmd
+        await secretClient!.setSecret(createNewSecretName, value)
+        secretCache.set(createNewSecretName, value)
+        details.setText(`Created secret ${createNewSecretName}.`)
+        const createdName = createNewSecretName
+        createNewSecretName = null
+        await selectVaultAndLoadSecrets(currentVault!)
+        // Select the newly created secret and show details
+        const idx = filteredSecrets.findIndex((s) => s.name === createdName)
+        if (idx >= 0) {
+          list.setSelectedIndex(idx)
+          await loadAndShowSecret(filteredSecrets[idx])
+        }
       } else {
         const trimmed = cmd.trim()
         if (trimmed === "q" || trimmed === "quit") {
@@ -567,6 +607,7 @@ async function main() {
   })
 
   list.on(SelectElementEvents.SELECTION_CHANGED, (_idx: number, selected) => {
+    if (focus !== "list") return
     if (state === "listSecrets" && selected?.value) {
       const sp: SecretProperties = selected.value
       const meta = [
@@ -584,6 +625,7 @@ async function main() {
 
   list.on(SelectElementEvents.ITEM_SELECTED, async (_idx: number, selected) => {
     if (!selected) return
+    if (focus !== "list") return
     if (state === "selectVault") {
       await selectVaultAndLoadSecrets(selected.value)
       focusList()
@@ -607,6 +649,7 @@ async function main() {
 
   // ENTER from filter acts like opening current selection
   filter.on(InputElementEvents.ENTER, async () => {
+    if (commandBar.visible) return
     const current = list.getSelectedOption()
     if (!current) return
     if (state === "selectVault") {
@@ -652,7 +695,15 @@ async function main() {
 
     // No exit on Escape; just close command bar if open
     if (name === "escape") {
-      if (commandBar.visible) closeCommandBar()
+      if (commandBar.visible) {
+        closeCommandBar()
+        return
+      }
+      if (focus === "filter") {
+        // Leave filter, return focus to list instead of navigating up a layer
+        focusList()
+        return
+      }
       else goBackOneLayer()
       return
     }
@@ -719,6 +770,19 @@ async function main() {
         forceRender()
         return
       }
+    }
+
+    // Create new secret in secrets view (does not require being in detail view)
+    if (state === "listSecrets" && focus === "list" && name === "n") {
+      actionMode = "createName"
+      createNewSecretName = null
+      commandBar.setTitle("Create • secret name")
+      commandBar.setValue("")
+      commandBar.visible = true
+      commandBar.focus()
+      applyLayout(renderer.terminalWidth, renderer.terminalHeight)
+      forceRender()
+      return
     }
 
     if (name === "b") {

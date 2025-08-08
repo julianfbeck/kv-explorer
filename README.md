@@ -1,83 +1,147 @@
-# Key Vault TUI
+# keyvault-tui
 
-A fast terminal UI for browsing and managing Azure Key Vault secrets. Built with Bun and the vendored OpenTUI library.
+A beautiful Terminal User Interface (TUI) for exploring Azure Key Vault secrets. Built with Bun and TypeScript.
 
 ## Features
 
-- Discover Key Vaults across all subscriptions via Azure CLI
-- Filter and select vaults and secrets
-- View secret metadata and values
-- Quick actions on a selected secret:
-  - `e`: edit value
-  - `c`: copy value to clipboard (macOS `pbcopy`)
-  - `r`: rename (creates new name with same value; attempts best-effort delete of old)
-  - `m`: move (copy) to another vault with new name (non-destructive)
-- Vim-like command bar under the header for prompts and `:q` to quit
-- Hierarchical navigation with `Esc` (detail → list → vaults)
+- 🔑 Browse Key Vault secrets across all Azure subscriptions
+- 🔍 Real-time filtering and search
+- 📝 View secret metadata and values
+- ✏️ Create new secrets
+- ✏️ Edit secret values in-place
+- 📋 Copy secrets to clipboard (macOS)
+- 🔄 Rename secrets (creates new, attempts to delete old)
+- 📦 Move secrets between Key Vaults (non-destructive copy)
+- ⌨️ Vim-like navigation and commands
+- 🎨 Clean, responsive terminal interface
 
-## Install (bunx)
+## Built With
 
-Once published to npm:
+This application is built using [OpenTUI](https://github.com/sst/opentui), a TypeScript library for building terminal user interfaces. OpenTUI provides the foundational TUI framework with native Zig rendering for high-performance terminal graphics.
+
+## Installation
+
+### Prerequisites
+
+- **Bun** (>= 1.0.0) - [Install Bun](https://bun.sh)
+- **Azure CLI** - [Install Azure CLI](https://aka.ms/azure-cli)
+- **Zig** (for building native libraries if needed) - [Install Zig](https://ziglang.org/download/)
+
+### Quick Start
 
 ```bash
+# Ensure you're logged into Azure
+az login
+
+# Run the application
 bunx keyvault-tui
 ```
 
-Or install globally:
-
-```bash
-bun add -g keyvault-tui
-keyvault-tui
-```
-
-## Requirements
-
-- Bun >= 1.0
-- Azure CLI (`az`) installed and logged in: `az login`
-- For clipboard copy on macOS: `pbcopy` (built-in). On Linux/WSL, clipboard is not yet auto-detected
-- OpenTUI native lib is vendored and built with Zig for your platform. If the prebuilt lib is not present, run:
-
-```bash
-bun run opentui:build
-```
-
-If you see an error about missing native library, ensure Zig is installed: `brew install zig` (macOS) or install from ziglang.org for your OS.
-
 ## Usage
 
-- `Tab`: switch focus between filter and list
-- `/`: focus filter, type to narrow the list
-- `Enter`: open (vault → load secrets; secret → load details)
-- `Esc`: go back layer-by-layer
-- `:`: open command bar (use `:q` to quit)
-- On a secret detail:
-  - `e`: edit value (command bar opens with prefilled value)
-  - `c`: copy value to clipboard
-  - `r`: rename (enter new name)
-  - `m`: move (select target vault in left list, then enter new name)
+### Navigation
 
-## Develop
+- **Tab** - Switch focus between filter and list
+- **/** - Jump to filter/search input
+- **↑↓** or **j/k** - Navigate list items
+- **Enter** - Select vault or open secret details
+- **Esc** - Go back one level (detail → list → vault selection)
+- **b** - Alternative back navigation
 
-- Run directly:
+### Secret Management
+
+When viewing a secret (after pressing Enter on it):
+
+- **n** - Create new secret (prompts for name, then value)
+- **e** - Edit secret value
+- **c** - Copy secret value to clipboard
+- **r** - Rename secret (creates new with same value)
+- **m** - Move/copy secret to another Key Vault
+
+### Commands
+
+- **:q** - Quit application (vim-style)
+- **Esc** - Close command bar or navigate back
+
+### Workflow
+
+1. **Select Key Vault**: Application loads all Key Vaults from your Azure subscriptions
+2. **Browse Secrets**: Use filter to find secrets, press Enter to view details
+3. **Manage Secrets**: Use keyboard shortcuts to create, edit, copy, rename, or move secrets
+4. **Navigate**: Use Esc to go back to previous views
+
+## Development
+
+### Local Development
 
 ```bash
-bun run kv-explorer.ts
-```
+# Clone and setup
+git clone <repository>
+cd keyvault-tui
+bun install
 
-- Rebuild OpenTUI native libs:
-
-```bash
+# Build OpenTUI native libraries
 bun run opentui:build
+
+# Run locally
+bun run kv:explorer
+
+# Or run smoke test (no Azure required)
+bun run kv:explorer --smoke-test
 ```
 
-- Package locally for testing:
+### Testing Local Package
 
 ```bash
-npm pack
-bunx ./keyvault-tui-*.tgz
+# Test the full packaging pipeline
+bun run pack:test
 ```
 
-## Notes
+This script builds the native libraries, creates an npm package, installs it globally, tests it with smoke test, and cleans up.
 
-- This package vendors `opentui/` in the repo; no external dependency is required for the TUI other than Bun.
-- Azure permissions must allow `secrets/list`, `secrets/get` for browsing, and `secrets/set` for edit/rename/move.
+### Publishing
+
+1. Build native libraries: `bun run opentui:build`
+2. Version bump: `npm version patch|minor|major`
+3. Pack and verify: `npm pack && tar -tf keyvault-tui-*.tgz | grep libopentui`
+4. Publish: `npm publish --access public`
+
+## Architecture
+
+- **Frontend**: TypeScript with OpenTUI for terminal rendering
+- **Backend**: Azure CLI for authentication, `@azure/keyvault-secrets` for Key Vault operations
+- **Native Layer**: Zig libraries (via OpenTUI) for high-performance terminal graphics
+- **Packaging**: Vendored OpenTUI with cross-platform native libraries included
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"Azure CLI not found"** - Install Azure CLI and run `az login`
+2. **"Failed to load Key Vaults"** - Ensure you have proper Azure permissions
+3. **Native library errors** - Run `bun run opentui:build` to rebuild platform libraries
+
+### Debug Mode
+
+Run with smoke test to verify installation without Azure dependencies:
+
+```bash
+bunx keyvault-tui --smoke-test
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test with `bun run pack:test`
+5. Submit a pull request
+
+## License
+
+[Your License Here]
+
+## Acknowledgments
+
+- Built with [OpenTUI](https://github.com/sst/opentui) by the SST team
+- Inspired by modern terminal applications and vim-like interfaces
