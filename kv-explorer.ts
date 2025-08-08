@@ -36,24 +36,10 @@ class TextBlockElement extends BufferedElement {
       // Check if this is a header line (starts with "Name:" or ends with ":")
       const isHeader = line.match(/^[A-Z][a-zA-Z\s]*:/) || line === "Value:"
       
-      if (isHeader && this.useStyledHeader && currentY + 2 < contentY + contentHeight) {
-        // Render header with tiny font in a nice color
-        const headerText = line.replace(':', '').trim().toUpperCase()
-        try {
-          renderFontToFrameBuffer(this.frameBuffer, {
-            text: headerText,
-            x: contentX,
-            y: currentY,
-            fg: RGBA.fromInts(100, 200, 255, 255), // Light blue
-            bg: RGBA.fromInts(20, 30, 40, 255),
-            font: "tiny"
-          })
-          currentY += 2 // Skip 2 lines for tiny font
-        } catch {
-          // Fallback to regular text if font rendering fails
-          this.frameBuffer.drawText(line, contentX, currentY, RGBA.fromInts(100, 200, 255, 255))
-          currentY += 1
-        }
+      if (isHeader && this.useStyledHeader) {
+        // Render header with just color styling - no large fonts
+        this.frameBuffer.drawText(line, contentX, currentY, RGBA.fromInts(100, 200, 255, 255))
+        currentY += 1
       } else if (line.trim() === "" || line === "Value:") {
         // Empty line or value separator
         currentY += 1
