@@ -1,0 +1,41 @@
+{
+  "name": "keyvault-tui",
+  "version": "0.1.0",
+  "type": "module",
+  "module": "index.ts",
+  "bin": {
+    "keyvault-tui": "bin/kvx.ts"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "scripts": {
+    "dev": "bun run index.ts",
+    "tui": "bun run tui.ts",
+    "kv:explorer": "bun run kv-explorer.ts",
+    "opentui:build": "cd opentui && bun run build:prod"
+  },
+  "files": [
+    "bin/",
+    "kv-explorer.ts",
+    "tui.ts",
+    "index.ts",
+    "tsconfig.json",
+    "README.md",
+    "opentui/"
+  ],
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.11.1",
+    "@azure/keyvault-secrets": "^4.10.0",
+    "@types/node": "^24.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
