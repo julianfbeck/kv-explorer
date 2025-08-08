@@ -86,6 +86,26 @@ type ViewState = "selectVault" | "listSecrets" | "moveSelectTarget"
 type FocusTarget = "list" | "filter" | "command"
 
 async function main() {
+  // Smoke test mode for packaging: start and stop quickly without Azure
+  if (process.argv.includes("--smoke-test")) {
+    try {
+      const renderer = await createCliRenderer({
+        targetFps: 1,
+        useAlternateScreen: false,
+        useConsole: false,
+        useMouse: false,
+        exitOnCtrlC: false,
+      })
+      renderer.stop()
+      console.log("SMOKE_OK")
+      process.exit(0)
+    } catch (e) {
+      console.error(e)
+      process.exit(1)
+    }
+    return
+  }
+
   const azVersion = await $`az --version`.quiet()
   if (azVersion.exitCode !== 0) {
     console.error("Azure CLI not found. Install it from https://aka.ms/azure-cli and run 'az login'.")
@@ -580,6 +600,8 @@ async function main() {
       commandBar.setValue(moveSourceSecret?.name ?? "")
       commandBar.visible = true
       commandBar.focus()
+      applyLayout(renderer.terminalWidth, renderer.terminalHeight)
+      forceRender()
     }
   })
 
@@ -602,6 +624,8 @@ async function main() {
       commandBar.setValue(moveSourceSecret?.name ?? "")
       commandBar.visible = true
       commandBar.focus()
+      applyLayout(renderer.terminalWidth, renderer.terminalHeight)
+      forceRender()
     }
   })
 

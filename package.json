@@ -13,7 +13,8 @@
     "dev": "bun run index.ts",
     "tui": "bun run tui.ts",
     "kv:explorer": "bun run kv-explorer.ts",
-    "opentui:build": "cd opentui && bun run build:prod"
+    "opentui:build": "cd opentui && bun run build:prod",
+    "pack:test": "bun run scripts/pack-test.ts"
   },
   "files": [
     "bin/",
@@ -33,7 +34,13 @@
   "dependencies": {
     "@azure/identity": "^4.11.1",
     "@azure/keyvault-secrets": "^4.10.0",
-    "@types/node": "^24.2.0"
+    "@types/node": "^24.2.0",
+    "bun-webgpu": "0.1.0",
+    "jimp": "1.6.0",
+    "three": "0.177.0",
+    "yoga-layout": "3.2.1",
+    "@dimforge/rapier2d-simd-compat": "^0.17.3",
+    "planck": "^1.4.2"
   },
   "publishConfig": {
     "access": "public"
